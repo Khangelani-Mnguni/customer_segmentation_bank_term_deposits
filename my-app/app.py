@@ -14,6 +14,10 @@ model_path = os.path.join(current_dir, 'best_xgb.pkl')
 with open(model_path, 'rb') as model_file:
     model = pickle.load(model_file)
 
+# Dynamic patch to fix compatibility between older XGBoost pickles and newer environments
+if not hasattr(model, 'use_label_encoder'):
+    model.use_label_encoder = False
+
 # Function to make predictions
 def predict(data, threshold=0.29):
     probabilities = model.predict_proba(data)[:, 1]  # Probability of class 1
@@ -33,11 +37,8 @@ def create_executive_summary(data):
     data['Probability'] = data['Probability'].apply(lambda x: f'High ({x*100:.0f}%)' if x >= 0.8 else f'Medium \
             ({x*100:.0f}%)' if x >= 0.5 else f'Low ({x*100:.0f}%)' if x >= 0.29 else f'Very Low ({x*100:.0f}%)')
 
-    # Select relevant columns for the executive summary
-    executive_summary = data[['age', 'Job', 'Marital Status', 'Education', 'Has Defaulted?', 'Previously Subscribed?', 'Contact Quarter', 'Prediction Outcome', 'Probability']]
-    executive_summary.rename(columns={'age': 'Age'}, inplace=True)
-    
-    return executive_summary
+    # Select relevant columns for the executive summary and rename cleanly (fixing the inplace warning)
+    return data[['age', 'Job', 'Marital Status', 'Education', 'Has Defaulted?', 'Previously Subscribed?', 'Contact Quarter', 'Prediction Outcome', 'Probability']].rename(columns={'age': 'Age'})
 
 def create_final_report(row):
     # Extract the numeric part of the probability
