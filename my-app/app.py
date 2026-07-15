@@ -14,9 +14,26 @@ model_path = os.path.join(current_dir, 'best_xgb.pkl')
 with open(model_path, 'rb') as model_file:
     model = pickle.load(model_file)
 
-# Dynamic patch to fix compatibility between older XGBoost pickles and newer environments
-if not hasattr(model, 'use_label_encoder'):
-    model.use_label_encoder = False
+# Catch-all patch to handle missing attributes in legacy pickled models
+def safe_getattr(self, name):
+    defaults = {
+        'use_label_encoder': False,
+        'gpu_id': None,
+        'importance_type': None,
+        'monotone_constraints': None,
+        'interaction_constraints': None,
+        'validate_parameters': None,
+        'predictor': None,
+        'base_score': None,
+        'early_stopping_rounds': None,
+        'eval_metric': None,
+    }
+    if name in defaults:
+        return defaults[name]
+    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+# Inject the safe attribute fallback directly into the model's class
+model.__class__.__getattr__ = safe_getattr
 
 # Function to make predictions
 def predict(data, threshold=0.29):
@@ -38,7 +55,10 @@ def create_executive_summary(data):
             ({x*100:.0f}%)' if x >= 0.5 else f'Low ({x*100:.0f}%)' if x >= 0.29 else f'Very Low ({x*100:.0f}%)')
 
     # Select relevant columns for the executive summary and rename cleanly (fixing the inplace warning)
-    return data[['age', 'Job', 'Marital Status', 'Education', 'Has Defaulted?', 'Previously Subscribed?', 'Contact Quarter', 'Prediction Outcome', 'Probability']].rename(columns={'age': 'Age'})
+    executive_summary = data[['age', 'Job', 'Marital Status', 'Education', 'Has Defaulted?', 'Previously Subscribed?', 'Contact Quarter', 'Prediction Outcome', 'Probability']]
+    executive_summary = executive_summary.rename(columns={'age': 'Age'})
+    
+    return executive_summary
 
 def create_final_report(row):
     # Extract the numeric part of the probability
